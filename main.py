@@ -1,12 +1,17 @@
+
+from dotenv import load_dotenv
+load_dotenv()
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PyPDF2 import PdfReader
 from openai import OpenAI
 import json
+import os
 
 app = FastAPI()
 
-client = OpenAI(api_key="Birbal")
+# Replace 'your-openai-api-key' with your actual key or use env var
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 # CORS setup
 app.add_middleware(
@@ -37,11 +42,12 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
 
         response = client.chat.completions.create(
-    model="gpt-3.5-turbo",
-    messages=[{"role": "user", "content": prompt}])
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
         )
 
         gpt_output = response.choices[0].message.content
+
         try:
             categorized = json.loads(gpt_output)
         except json.JSONDecodeError:
