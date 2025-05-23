@@ -1,12 +1,12 @@
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from PyPDF2 import PdfReader
-import openai
+from openai import OpenAI
 import json
 
 app = FastAPI()
 
-openai.api_key = "your_openai_api_key_here"
+client = OpenAI(api_key="Birbal")
 
 # CORS setup
 app.add_middleware(
@@ -36,9 +36,9 @@ async def upload_pdf(file: UploadFile = File(...)):
             + "\n".join(lines[:50])
         )
 
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
-            messages=[{"role": "user", "content": prompt}]
+        response = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": prompt}])
         )
 
         gpt_output = response.choices[0].message.content
