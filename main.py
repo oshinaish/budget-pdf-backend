@@ -1,10 +1,14 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-import fitz  # PyMuPDF
-import io
+from PyPDF2 import PdfReader
+import openai
+import json
 
 app = FastAPI()
 
+openai.api_key = "your_openai_api_key_here"
+
+# CORS setup
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,24 +20,39 @@ app.add_middleware(
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     try:
-        contents = await file.read()
-        pdf_stream = io.BytesIO(contents)
-        doc = fitz.open(stream=pdf_stream, filetype="pdf")
+        reader = PdfReader(file.file)
+        lines = []
+        for page in reader.pages:
+            text = page.extract_text()
+            if text:
+                lines.extend(line.strip() for line in text.splitlines() if line.strip())
 
-        full_text = ""
-        for page in doc:
-            full_text += page.get_text()
+        if not lines:
+            return {"status": "error", "message": "No text found in PDF."}
 
-        lines = full_text.split("\n")
-        transactions = []
-        for line in lines:
-            if any(char.isdigit() for char in line) and ("INR" in line or ".00" in line):
-                transactions.append(line.strip())
+        # Prepare GPT prompt
+        prompt = (
+            "Categorize these bank transactions by category (Dining, Travel, Groceries, etc.) in JSON format:\n\n"
+            + "\n".join(lines[:50])
+        )
+
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        gpt_output = response.choices[0].message.content
+        try:
+            categorized = json.loads(gpt_output)
+        except json.JSONDecodeError:
+            categorized = {"Uncategorized": lines}
 
         return {
             "status": "success",
-            "total_transactions": len(transactions),
-            "raw_transactions": transactions[:20]
+            "total_transactions": len(lines),
+            "raw_transactions": lines,
+            "categorized": categorized
         }
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
